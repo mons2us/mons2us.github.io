@@ -8,6 +8,7 @@ tags: deeplearning
 ---
 
    이 글은 논문 \<Simple and Scalable Predictive Uncertainty Estimation using Deep Ensembles\>을 이해하고자 다양한 소스로부터 학습한 내용을 정리한 글입니다. 혹시 내용 중 틀린 부분이 있거나 궁금한 사항이 있으신 경우 댓글을 남겨주시면 최선을 다해 소통하겠습니다.
+   논문의 실험 결과를 재현한 코드는 제 [깃허브](https://github.com/mons2us/paper_reproduction/tree/master/Deep-Ensemble)를 참고하시기 바랍니다.
 
 
 # Overview
