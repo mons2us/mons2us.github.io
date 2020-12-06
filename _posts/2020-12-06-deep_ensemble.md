@@ -33,6 +33,7 @@ https://sanjaykthakur.com/2018/12/05/the-very-basics-of-bayesian-neural-networks
 
 # Experiments
 
+## With MSE Loss
 우선 MSE Loss를 사용하는 기본적인 신경망은 아래와 같이 구현할 수 있습니다.<br>
 
 ```python
@@ -67,8 +68,75 @@ optimizer = optim.Adam(singlenet.parameters(), lr = 0.1)
 
 ![image](/assets/assets_post/2020-12-06-deep_ensemble/singlenn_result1.png)<br>
 
-플롯에서 보이듯이, 학습 데이터가 모여있는 곳에서는 실제 ground truth와 거의 동일한 수준의 예측값을 뱉고 있으나, 학습 데이터 외의 공간($$x \in [-\inf,-3)\cup(3,\inf]$$)에서는 점점 ground truth와 멀어지는 것을 확인할 수 있습니다. 하지만 단순한 신경망에 MSE Loss를 사용하는 것으로는 우리가 원하는 uncertainty를 얻기가 힘듭니다. 따라서 논문에서 제안한대로 MSE가 아닌 Negative Log-likelihood(NLL)을 손실함수로 하는 모델을 아래와 같이 적합할 수 있습니다.<br>
+플롯에서 보이듯이, 학습 데이터가 모여있는 곳에서는 실제 ground truth와 거의 동일한 수준의 예측값을 뱉고 있으나, 학습 데이터 외의 공간($$x \in [-\inf,-3)\cup(3,\inf]$$)에서는 점점 ground truth와 멀어지는 것을 확인할 수 있습니다. 하지만 단순한 신경망에 MSE Loss를 사용하는 것으로는 우리가 원하는 uncertainty를 얻기가 힘듭니다. 따라서 논문에서 제안한대로 MSE가 아닌 Negative Log-likelihood(NLL)을 손실함수로 하는 모델을 아래와 같이 적합할 수 있습니다. 아까 적합한 모델과는 다르게, 신경망의 결과값이 1개의 스칼라 값이 아닌 mu, sigma의 두가지 스칼라 값이 됩니다.<br>
 
+## With NLL Loss
+```python
+class SingleNet(nn.Module):
+    def __init__(self):
+        super(SingleNet, self).__init__()
+        self.input_dim  = 1
+        self.layer_dim  = 100
+        self.output_dim = 2
+
+        self.layer1 = nn.Sequential(
+            nn.Linear(self.input_dim, self.layer_dim),
+            nn.ReLU(),
+        )
+
+        self.layer2 = nn.Sequential(
+            nn.Linear(self.layer_dim, self.output_dim),
+        )
+
+    def forward(self, x):
+        x = self.layer1(x)
+        x = self.layer2(x)
+        return x
+
+
+def nll_loss(mu, sigma, labels):
+    loss = torch.mean(torch.div(torch.pow(torch.sub(labels, mu), 2), sigma))
+    loss += torch.mean(torch.log(sigma))
+    return loss
+
+mse_loss = nn.MSELoss()
+singlenet = SingleNet()
+softplus = nn.Softplus()
+optimizer = optim.Adam(singlenet.parameters(), lr = 0.1)
+
+
+# Hyper-params
+epochs = 100
+
+losses = []
+for epoch in range(epochs):
+    batch_loss = 0
+
+    for i, (x, y) in enumerate(data_loader):
+
+        inputs = torch.unsqueeze(x, 1)
+        labels = torch.unsqueeze(y, 1)
+
+        optimizer.zero_grad()
+
+        outputs = singlenet(inputs)
+        mu = torch.unsqueeze(outputs[:, 0], 1)
+        sigma = torch.unsqueeze(softplus(outputs[:, 1])+1e-6, 1)
+        
+        loss = nll_loss(mu, sigma, labels)
+        loss.backward()
+        optimizer.step()
+
+        batch_loss += loss.sum().item()
+
+    if epoch % 10 == 0:
+        print(f"loss: {batch_loss/len(data_loader)}")
+
+    losses.append(batch_loss/len(data_loader))
+```
+그리고 위 모형으로 적합된 결과를 동일한 방법으로 그린 플롯은 아래와 같습니다.<br>
+![image](/assets/assets_post/2020-12-06-deep_ensemble/single_nll_result1.png)<br>
+훈련에 사용된 데이터가 있는 구간에서는 굉장히 낮은 uncertainty를 보이지만 훈련 데이터를 벗어나는 구간부터(-3, 3) 높은 uncertainty를 보이고 있음을 확인할 수 있습니다. 즉 논문에서 제안한 대로 Negative Log-likelihood를 "proper score rule"로 설정 및 손실함수로 이용함으로써, 우리는 신경망 모델로 하여금 uncertainty를 적절하게 측정할 수 있도록 학습하게 되는 것입니다.<br>
 
 
 
